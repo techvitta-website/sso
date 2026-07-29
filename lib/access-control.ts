@@ -73,6 +73,7 @@ export async function provisionAccess(actorId: string, userId: string, siteId: s
   }
 
   let tempPw: string | null = null;
+  let authUserId = "";
   // Match on EMAIL, not the hub id: an app may already have this person under
   // its own id (an account created before the hub existed). Forcing the hub id
   // would collide on the unique email and fail. So find by email; only create
@@ -84,10 +85,11 @@ export async function provisionAccess(actorId: string, userId: string, siteId: s
 
   if (existing) {
     // Already has a login here — just make sure it isn't suspended.
+    authUserId = existing.id;
     await admin.auth.admin.updateUserById(existing.id, { ban_duration: "none" });
   } else {
     tempPw = tempPassword();
-    const { error } = await admin.auth.admin.createUser({
+    const { data: created, error } = await admin.auth.admin.createUser({
       email: user.email,
       password: tempPw,
       email_confirm: true,
@@ -96,27 +98,48 @@ export async function provisionAccess(actorId: string, userId: string, siteId: s
     if (error && !/already/i.test(error.message)) {
       throw Object.assign(new Error(`Could not create login in ${site.display_name}: ${error.message}`), { status: 500 });
     }
+    authUserId = created?.user?.id ?? "";
+    // A create that lost a race (or hit "already exists") gives no id back —
+    // re-list to recover it, so adapters keyed by auth id still work.
+    if (!authUserId) {
+      const { data: relist } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const found = (relist?.users ?? []).find(
+        (u: any) => String(u.email ?? "").toLowerCase() === user.email.toLowerCase()
+      );
+      authUserId = found?.id ?? "";
+    }
   }
 
   // Some apps need a row in their own authorization table (e.g. CMS's
-  // hr_users) or they reject the login. Write it if this app declares one.
+  // hr_users) or they reject the login / drop the user to the lowest role.
+  // Apply whatever this app declares.
   const adapter = SITE_ADAPTERS[site.name];
   if (adapter) {
-    const { data: already } = await admin
-      .from(adapter.profileTable)
-      .select("email")
-      .eq("email", user.email)
-      .maybeSingle();
-    if (!already) {
-      const { error: rowErr } = await admin.from(adapter.profileTable).insert(
-        adapter.buildRow({ email: user.email, full_name: user.full_name, role: user.role })
-      );
-      if (rowErr) {
-        throw Object.assign(
-          new Error(`Login created in ${site.display_name}, but its ${adapter.profileTable} record failed: ${rowErr.message}`),
-          { status: 500 }
-        );
+    try {
+      if (adapter.apply) {
+        await adapter.apply({
+          admin,
+          authUserId,
+          user: { email: user.email, full_name: user.full_name, role: user.role },
+        });
+      } else if (adapter.profileTable && adapter.buildRow) {
+        const { data: already } = await admin
+          .from(adapter.profileTable)
+          .select("email")
+          .eq("email", user.email)
+          .maybeSingle();
+        if (!already) {
+          const { error: rowErr } = await admin.from(adapter.profileTable).insert(
+            adapter.buildRow({ email: user.email, full_name: user.full_name, role: user.role })
+          );
+          if (rowErr) throw new Error(rowErr.message);
+        }
       }
+    } catch (e: any) {
+      throw Object.assign(
+        new Error(`Login created in ${site.display_name}, but its authorization record failed: ${e.message}`),
+        { status: 500 }
+      );
     }
   }
 
