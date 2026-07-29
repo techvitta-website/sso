@@ -1,45 +1,59 @@
-// Middleware that conditionally uses Clerk
-// When Clerk isn't configured, it's a no-op to prevent initialization errors
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  // Run on everything except static assets and image files.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };
 
-// Check if Clerk is configured
-const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
-const clerkSecretKey = process.env.CLERK_SECRET_KEY || "";
+// Routes reachable without a session. Everything else requires sign-in.
+const PUBLIC = [/^\/sign-in/, /^\/sign-up/, /^\/auth(\/|$)/, /^\/api\/webhooks/];
 
-const isClerkConfigured = 
-  clerkPublishableKey.length > 0 &&
-  !clerkPublishableKey.includes("...") &&
-  clerkPublishableKey.startsWith("pk_") &&
-  clerkSecretKey.length > 0 &&
-  !clerkSecretKey.includes("...") &&
-  clerkSecretKey.startsWith("sk_");
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
 
-// Default: no-op middleware when Clerk isn't configured
-// This prevents the "Missing publishableKey" error
-export default function middleware() {
-  // When Clerk isn't configured, allow all requests through
-  // The app layout will show the setup message instead
-  return;
-}
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
 
-// NOTE: When you add your Clerk keys to .env.local, uncomment the code below
-// and comment out the no-op middleware above to enable Clerk authentication
+  // getUser() re-validates the session against Supabase — do not gate on the
+  // raw cookie. This refreshes the session and is the actual security check.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-/*
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+  const path = request.nextUrl.pathname;
+  const isPublic = PUBLIC.some((re) => re.test(path));
 
-const isPublicRoute = createRouteMatcher([
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/api/webhooks(.*)",
-]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
-    await auth.protect();
+  if (!user && !isPublic) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/sign-in";
+    url.searchParams.set("redirect", path);
+    return NextResponse.redirect(url);
   }
-});
-*/
+
+  // Signed-in users have no reason to sit on the sign-in page.
+  if (user && (path === "/sign-in" || path === "/sign-up")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  return response;
+}

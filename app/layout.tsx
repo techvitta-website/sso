@@ -9,12 +9,7 @@ export const metadata: Metadata = {
   description: "Manage your SSO infrastructure across all applications",
 };
 
-// Authentication disabled for now - will be enabled after linking websites
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={inter.className}>{children}</body>

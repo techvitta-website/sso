@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@/lib/auth";
 import { getOrCreateUserProfile } from "@/lib/supabase-helpers";
 
 /**
- * API route to sync Clerk user with Supabase profile
+ * Ensures a profile row exists for the signed-in Supabase user.
  * Call this after user signs in to ensure profile exists
  */
 export async function POST() {
@@ -14,7 +14,7 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get user data from Clerk
+    // Get the signed-in Supabase user
     const user = await currentUser();
 
     if (!user) {
@@ -24,8 +24,8 @@ export async function POST() {
     // Get or create profile in Supabase
     const profile = await getOrCreateUserProfile(
       userId,
-      user.emailAddresses[0]?.emailAddress || "",
-      user.fullName || undefined
+      user.email || "",
+      (user.user_metadata?.full_name as string | undefined) || undefined
     );
 
     if (!profile) {
