@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TechVitta — Login & Access Control: Morning Packet</title>
+<style>
+  :root{--ink:#0f172a;--ink2:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
+        --ok:#047857;--okbg:#ecfdf5;--crit:#b91c1c;--critbg:#fef2f2;--warn:#b45309;--warnbg:#fffbeb;
+        --info:#1d4ed8;--infobg:#eff6ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink2);
+       font:15px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:920px;margin:0 auto;padding:34px 20px 90px}
+  header{border-bottom:3px solid #0ea5e9;padding-bottom:16px;margin-bottom:26px}
+  h1{color:var(--ink);font-size:25px;margin:0 0 6px;letter-spacing:-.02em}
+  header p{margin:0;color:var(--muted)}
+  h2{color:var(--ink);font-size:19px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{color:var(--ink);font-size:16px;margin:22px 0 8px}
+  p{margin:0 0 12px}
+  code{background:#eef2f7;padding:1px 6px;border-radius:4px;color:var(--ink);
+       font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+  pre{background:#0f172a;color:#e2e8f0;padding:13px 15px;border-radius:8px;overflow-x:auto;
+      font:12.5px/1.55 ui-monospace,Menlo,monospace;margin:10px 0}
+  pre .c{color:#94a3b8}
+  table{width:100%;border-collapse:collapse;margin:14px 0 20px;font-size:14px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f1f5f9;color:var(--ink);font-weight:600;font-size:13px}
+  .b{display:inline-block;border-radius:20px;padding:1px 9px;font-size:12px;font-weight:700;white-space:nowrap}
+  .done{background:var(--okbg);color:var(--ok);border:1px solid #a7f3d0}
+  .crit{background:var(--critbg);color:var(--crit);border:1px solid #fecaca}
+  .warnb{background:var(--warnbg);color:var(--warn);border:1px solid #fde68a}
+  .info{background:var(--infobg);color:var(--info);border:1px solid #bfdbfe}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:14px 0}
+  .crit-note{background:var(--critbg);border:1px solid #fecaca;border-left:4px solid var(--crit);
+        border-radius:8px;padding:13px 17px;margin:16px 0}
+  .warn-note{background:var(--warnbg);border:1px solid #fde68a;border-left:4px solid var(--warn);
+        border-radius:8px;padding:13px 17px;margin:16px 0}
+  .ok-note{background:var(--okbg);border:1px solid #a7f3d0;border-left:4px solid var(--ok);
+        border-radius:8px;padding:13px 17px;margin:16px 0}
+  .step{background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px 18px 14px;margin:14px 0}
+  ol{padding-left:20px} li{margin:6px 0}
+  .tag{font:12px ui-monospace,Menlo,monospace;color:var(--muted)}
+  a{color:#0369a1}
+  footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  .big{font-size:16px;font-weight:600;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>TechVitta — Login &amp; Access Control</h1>
+  <p>Overnight work summary + your morning checklist · 29 July 2026</p>
+</header>
+
+<p class="big">Read this top to bottom once. It has three parts: what I finished while you were away,
+the one thing blocking you (your own login), and a prioritised checklist of what needs your hands —
+each step says exactly which screen to use.</p>
+
+<div class="crit-note">
+  <p><strong>⚠ Most urgent thing I found:</strong> the <strong>HRMS app ships its Supabase
+  <em>service_role</em> (full-admin) key into the browser</strong> — it's attached to
+  <code>window.__supabaseAdmin</code> and baked into the public JavaScript at hrms.techvitta.in.
+  That means the key is <strong>already public</strong>: anyone who opened that site could have taken
+  it and gained full admin over the HRMS database. It must be rotated <em>and</em> removed from the
+  app's code (details in Part 3, item&nbsp;A). Rotating alone won't help — the next build would leak
+  the new key again.</p>
+</div>
+
+<h2>Part 1 — What I finished tonight (no action needed)</h2>
+
+<table>
+  <thead><tr><th>Area</th><th>What changed</th><th>State</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Login hub<br><span class="tag">sso repo</span></td>
+      <td>Deleted 10 leftover <code>/api/test/*</code> diagnostic endpoints (Clerk-era; some dumped
+          cross-app users or used service keys behind only a session). Added an admin check to all 6
+          <code>/api/sync/*</code> routes and <code>/api/admin/add-service-key</code>, which previously
+          ran with "no auth required." Pushed to <code>main</code> (auto-deploys).</td>
+      <td><span class="b done">DONE</span></td>
+    </tr>
+    <tr>
+      <td>App directory<br><span class="tag">Master DB</span></td>
+      <td>Sales, CMS and HRMS are registered in the hub with their database URLs (verified). They now
+          appear as columns on the access console. No service keys are stored in the table (scrubbed).</td>
+      <td><span class="b done">DONE</span></td>
+    </tr>
+    <tr>
+      <td>Leaked key in git<br><span class="tag">sso repo</span></td>
+      <td>Removed a hard-coded HRMS <em>service_role</em> key that was committed in
+          <code>add-hrms-site.sql</code>. (It's still in git history — see the rotation list.)</td>
+      <td><span class="b done">DONE</span></td>
+    </tr>
+    <tr>
+      <td>HRMS provisioning<br><span class="tag">sso repo</span></td>
+      <td>Built the HRMS adapter so a grant creates the login <em>and</em> writes the correct
+          <code>user_roles</code> role. CMS adapter (writes <code>hr_users</code>) was already done.</td>
+      <td><span class="b done">DONE</span></td>
+    </tr>
+    <tr>
+      <td>Sales database<br><span class="tag">Sales DB</span></td>
+      <td>Re-verified: the privilege-escalation guard trigger is present, RLS is on, and the anon/
+          user role has <strong>no</strong> permission to write the <code>role</code> column. Solid.</td>
+      <td><span class="b done">VERIFIED</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Part 2 — The one thing blocking you: your login doesn't exist yet</h2>
+
+<p>Every query confirmed it: the Master login database has <strong>one</strong> account and
+<strong>one</strong> profile, and <strong>neither is yours</strong>. There is simply no account for
+<code>venkatesh.malakala@gmail.com</code> to sign in with. Two short steps fix it. Both are in the
+<strong>Master</strong> project, ref <code>zphwtteknhxrasnmskms</code>.</p>
+
+<div class="step">
+  <h3>Step 1 — create your login (Users page, no SQL)</h3>
+  <p>Open: <br><span class="tag">https://supabase.com/dashboard/project/zphwtteknhxrasnmskms/auth/users</span></p>
+  <ol>
+    <li>Click <strong>Add user → Create new user</strong>.</li>
+    <li>Email <code>venkatesh.malakala@gmail.com</code>, choose a password.</li>
+    <li>Turn <strong>Auto Confirm User ON</strong> (without it you can't sign in).</li>
+    <li>Click <strong>Create user</strong>.</li>
+  </ol>
+</div>
+
+<div class="step">
+  <h3>Step 2 — give yourself admin on the console (SQL Editor)</h3>
+  <p>Open: <br><span class="tag">https://supabase.com/dashboard/project/zphwtteknhxrasnmskms/sql/new</span><br>
+     Paste and Run. It should say <code>INSERT 0 1</code>. (If it says <code>0 0</code>, Step 1 didn't
+     happen — do it first.)</p>
+<pre>insert into public.user_profiles (id, email, full_name, role, clerk_user_id)
+select u.id::text, u.email, 'Venkatesh', 'admin', u.id::text
+from auth.users u
+where u.email = 'venkatesh.malakala@gmail.com'
+on conflict (id) do update
+  set role = 'admin', email = excluded.email;</pre>
+</div>
+
+<p>Then sign in at <strong>logins.techvitta.in</strong> with that email and password → you land on the
+access console at <code>/access</code>.</p>
+
+<h2>Part 3 — Your checklist, in priority order</h2>
+
+<h3><span class="b crit">CRITICAL</span> &nbsp;A. HRMS is leaking its admin key to the browser</h3>
+<p>This is the biggest risk across all your apps. The HRMS front-end creates a <em>service_role</em>
+Supabase client in the browser (<code>src/integrations/supabase/client.ts</code>, exposed as
+<code>window.__supabaseAdmin</code>). Anyone can open that site's console and run admin commands —
+list every user, delete records, or make themselves admin. Fixing it is two parts and order matters:</p>
+<ol>
+  <li><strong>Remove it from the code first.</strong> Delete the service-role client and every
+      <code>supabaseAdmin</code> use in the browser (<code>useEmployees.ts</code>,
+      <code>lib/client-setup.ts</code>, <code>lib/client-auto-setup.ts</code>). Those admin
+      operations (creating employees/users) must move to the existing Supabase <em>edge function</em>
+      <code>auto-setup-client</code>, which already runs server-side with the key safely. Also remove
+      <code>VITE_SERVICE_ROLE_KEY</code> from the HRMS project's Vercel env.</li>
+  <li><strong>Then rotate the HRMS service_role key</strong> (it's compromised — treat as public).
+      Because the app no longer ships it, rotation finally sticks.</li>
+</ol>
+<p class="tag">I did not push this change: it's a refactor on a live production app and, done hastily
+unattended, it would break employee creation. It needs a proper edge-function move + a test. I can do
+it with you in one focused pass — it's the first thing to tackle.</p>
+
+<h3><span class="b crit">CRITICAL</span> &nbsp;B. Anyone logged into CMS or HRMS can make themselves admin</h3>
+<p>Both apps decide "are you an admin?" from a database row the browser is allowed to edit, and the
+role tables have no rule stopping a user from editing their own role. So a normal HR user can set their
+own role to <code>admin</code>. The real fix is a database rule (RLS) on those tables. Run the SQL
+below in each app's database. <strong>Test in a quiet window</strong> — I could not test these against
+those databases (no access), and an over-tight rule could affect login, so read the notes.</p>
+
+<p><strong>CMS database</strong> (ref <code>qzgzmytmfoozociuhgtp</code>) — lock the <code>hr_users</code> table:</p>
+<pre><span class="c">-- Signed-in users can still READ (needed for login + the team list),
+-- but only admins may INSERT/UPDATE/DELETE. The hub provisions with the
+-- service key, which bypasses RLS, so grants keep working.</span>
+alter table public.hr_users enable row level security;
+
+create or replace function public.cms_is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.hr_users
+                 where email = auth.jwt()->>'email' and role = 'admin');
+$$;
+
+drop policy if exists hr_users_select on public.hr_users;
+create policy hr_users_select on public.hr_users
+  for select to authenticated using (true);
+
+drop policy if exists hr_users_write on public.hr_users;
+create policy hr_users_write on public.hr_users
+  for all to authenticated
+  using (public.cms_is_admin()) with check (public.cms_is_admin());
+
+<span class="c">-- hr_users also has a plaintext `password` column exposed to the app. Null it out.</span>
+update public.hr_users set password = null where password is not null;</pre>
+<p class="tag">Note: after this, the CMS "Edit user / change role" button will only work for admins
+(correct). If any non-admin flow wrote to hr_users, move it behind an edge function.</p>
+
+<p><strong>HRMS database</strong> (ref <code>snjtkvvmjqizdfyqbyzd</code>) — lock the <code>user_roles</code> table:</p>
+<pre><span class="c">-- Stop users granting themselves roles. Admins (and the hub's service key)
+-- can still manage roles.</span>
+alter table public.user_roles enable row level security;
+revoke all on public.user_roles from anon, authenticated;
+grant select on public.user_roles to authenticated;
+
+create or replace function public.hrms_is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.user_roles ur join public.roles r on r.id = ur.role_id
+    where ur.user_id = auth.uid() and r.name = 'Admin');
+$$;
+
+drop policy if exists user_roles_select on public.user_roles;
+create policy user_roles_select on public.user_roles
+  for select to authenticated
+  using (user_id = auth.uid() or public.hrms_is_admin());
+
+drop policy if exists user_roles_write on public.user_roles;
+create policy user_roles_write on public.user_roles
+  for all to authenticated
+  using (public.hrms_is_admin()) with check (public.hrms_is_admin());</pre>
+<p class="tag">Note: HRMS currently lets a brand-new "Client" self-signup insert its own
+<code>user_roles</code> row from the browser — this SQL will block that. If you rely on client
+self-signup, move that insert into the <code>auto-setup-client</code> edge function (it already exists).
+Also worth removing later: hard-coded email backdoors in HRMS's AuthContext
+(<code>admin@tv.com → Admin</code>, etc.) grant admin with no database check.</p>
+
+<h3><span class="b warnb">ACTIVATE</span> &nbsp;C. Turn on CMS &amp; HRMS grants (Vercel)</h3>
+<p>The hub can already provision Sales. To let it provision CMS and HRMS, add each app's
+<strong>secret</strong> key to the <em>sso</em> project in Vercel (Settings → Environment Variables),
+then redeploy once:</p>
+<table>
+  <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td><code>SITE_SERVICE_KEY_CMS</code></td><td>CMS project's <code>sb_secret_…</code> key (rotate first — see D)</td></tr>
+    <tr><td><code>SITE_SERVICE_KEY_HRMS</code></td><td>HRMS project's <strong>new</strong> <code>sb_secret_…</code> key (after the rotation in A)</td></tr>
+  </tbody>
+</table>
+<p class="tag">Reminder: the key you need starts with <code>sb_secret_</code> (admin), not
+<code>sb_publishable_</code> (public). Paste it straight into Vercel, never into chat.</p>
+
+<h3><span class="b warnb">ROTATE</span> &nbsp;D. Keys to rotate</h3>
+<table>
+  <thead><tr><th>Key</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>HRMS <code>service_role</code></td><td><strong>Public</strong> (shipped in the browser + in git history). Do the code fix in A first, then rotate.</td></tr>
+    <tr><td>CMS <code>service_role</code>/secret</td><td>Was pasted in chat earlier. Rotate, then use the new one for <code>SITE_SERVICE_KEY_CMS</code>.</td></tr>
+    <tr><td>Master secret &amp; Sales service key</td><td>Pasted in chat during setup. Rotate for hygiene.</td></tr>
+    <tr><td>GitHub org PAT</td><td>Used to push these repos. Rotate when convenient and update it wherever it's stored.</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="b info">OPTIONAL</span> &nbsp;E. Master DB tidy-ups</h3>
+<p>Run in the Master SQL Editor (<code>zphwtteknhxrasnmskms</code>) when convenient:</p>
+<pre><span class="c">-- Let the hub record its audit trail (writes silently fail today: no INSERT policy).</span>
+drop policy if exists audit_logs_insert on public.audit_logs;
+create policy audit_logs_insert on public.audit_logs
+  for insert to authenticated with check (true);</pre>
+
+<h2>Part 4 — After you're in: the 60-second test</h2>
+<p>Once your login works (Part 2) and a service key is set for an app (C), go to
+<strong>logins.techvitta.in/access</strong>, find your row, and click <strong>Grant</strong> on that
+app's column. Green (with a temp password for a new login) means the whole pipeline works. An error
+tells us which piece to fix — send me the wording.</p>
+
+<div class="ok-note">
+  <p><strong>Where each app stands for central login:</strong> Sales is fully wired and testable now.
+  CMS and HRMS are code-complete on the hub side — they just need their secret key in Vercel (C) and,
+  for HRMS, the key fix in A. The two CRITICAL items (A and B) are about the apps' <em>own</em>
+  security and are independent of the central-login work, but they're the highest priority overall.</p>
+</div>
+
+<footer>
+  Prepared overnight while you were away. Hub changes are pushed to the <code>sso</code> repo's
+  <code>main</code>. Database and Vercel steps are left for you because I have no access to the Master,
+  CMS, or HRMS accounts. Nothing secret is reproduced in this document.
+</footer>
+
+</div>
+</body>
+</html>
