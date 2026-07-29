@@ -65,8 +65,9 @@ INSERT INTO public.connected_sites (
     'active',
     'oauth',
     'https://snjtkvvmjqizdfyqbyzd.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanRrdnZtanFpemRmeXFieXpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0NzE3ODksImV4cCI6MjA2ODA0Nzc4OX0.cphGba1NoF7CqmeJqI-B9uJsLy1r18HHKFsmslT59GY',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanRrdnZtanFpemRmeXFieXpkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjQ3MTc4OSwiZXhwIjoyMDY4MDQ3Nzg5fQ.blV3qDpiRlQjRrS0kwDf6PqIW09STvUFudXNSboH2sY',
+    NULL, -- anon key not stored in the DB anymore
+    NULL, -- SERVICE KEY REMOVED — it lives in Vercel env (SITE_SERVICE_KEY_HRMS), never in a table/repo
+
     true,
     'HRMS (Human Resource Management System) - Connected via SSO Dashboard'
 )
