@@ -72,16 +72,21 @@ export async function provisionAccess(actorId: string, userId: string, siteId: s
   }
 
   let tempPw: string | null = null;
-  // Does a login already exist in the target app?
-  const existing = await admin.auth.admin.getUserById(user.id).catch(() => null);
+  // Match on EMAIL, not the hub id: an app may already have this person under
+  // its own id (an account created before the hub existed). Forcing the hub id
+  // would collide on the unique email and fail. So find by email; only create
+  // a fresh login when there genuinely isn't one.
+  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const existing = (list?.users ?? []).find(
+    (u: any) => String(u.email ?? "").toLowerCase() === user.email.toLowerCase()
+  );
 
-  if (existing?.data?.user) {
-    // Re-enable (unban) in case it was previously revoked by suspension.
-    await admin.auth.admin.updateUserById(user.id, { ban_duration: "none" });
+  if (existing) {
+    // Already has a login here — just make sure it isn't suspended.
+    await admin.auth.admin.updateUserById(existing.id, { ban_duration: "none" });
   } else {
     tempPw = tempPassword();
     const { error } = await admin.auth.admin.createUser({
-      id: user.id,
       email: user.email,
       password: tempPw,
       email_confirm: true,
@@ -135,9 +140,12 @@ export async function revokeAccess(actorId: string, userId: string, siteId: stri
 
   // Suspend the login rather than delete it — deleting would orphan whatever
   // records in the app point at this user. "banned forever" is a duration.
-  const existing = await admin.auth.admin.getUserById(user.id).catch(() => null);
-  if (existing?.data?.user) {
-    await admin.auth.admin.updateUserById(user.id, { ban_duration: "876000h" });
+  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const existing = (list?.users ?? []).find(
+    (u: any) => String(u.email ?? "").toLowerCase() === user.email.toLowerCase()
+  );
+  if (existing) {
+    await admin.auth.admin.updateUserById(existing.id, { ban_duration: "876000h" });
   }
 
   const central = createClient();
