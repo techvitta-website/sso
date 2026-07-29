@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { siteAdminClient, siteServiceKey } from "@/lib/sites";
+import { SITE_ADAPTERS } from "@/lib/site-adapters";
 
 // Cryptographically strong temporary password, readable enough to hand over.
 function tempPassword(): string {
@@ -97,11 +98,27 @@ export async function provisionAccess(actorId: string, userId: string, siteId: s
     }
   }
 
-  // Mirror a profile row in the app if it keeps one (best-effort).
-  await admin
-    .from("user_profiles")
-    .upsert({ id: user.id, email: user.email, full_name: user.full_name, role: user.role }, { onConflict: "id" })
-    .then(() => {}, () => {});
+  // Some apps need a row in their own authorization table (e.g. CMS's
+  // hr_users) or they reject the login. Write it if this app declares one.
+  const adapter = SITE_ADAPTERS[site.name];
+  if (adapter) {
+    const { data: already } = await admin
+      .from(adapter.profileTable)
+      .select("email")
+      .eq("email", user.email)
+      .maybeSingle();
+    if (!already) {
+      const { error: rowErr } = await admin.from(adapter.profileTable).insert(
+        adapter.buildRow({ email: user.email, full_name: user.full_name, role: user.role })
+      );
+      if (rowErr) {
+        throw Object.assign(
+          new Error(`Login created in ${site.display_name}, but its ${adapter.profileTable} record failed: ${rowErr.message}`),
+          { status: 500 }
+        );
+      }
+    }
+  }
 
   // Record the grant centrally.
   const central = createClient();
