@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/require-admin";
 import { createClient } from "@supabase/supabase-js";
 
 // Simple Supabase client for API routes (no auth required for now)
@@ -20,6 +21,7 @@ function getSupabaseClient() {
  */
 export async function POST(request: Request) {
   try {
+    await requireAdmin();
     const { userId } = await request.json();
 
     if (!userId) {

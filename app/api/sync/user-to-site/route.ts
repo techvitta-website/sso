@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/require-admin";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -13,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
  */
 export async function POST(request: Request) {
   try {
+    await requireAdmin();
     const { userId, siteId } = await request.json();
 
     console.log(`🔄 Starting sync: userId=${userId}, siteId=${siteId}`);
