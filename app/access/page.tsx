@@ -62,7 +62,10 @@ export default function AccessControlPage() {
             <h1 className="text-2xl font-semibold text-slate-900">Access Control</h1>
             <p className="text-sm text-slate-500">Grant or revoke each person&apos;s access to every connected app.</p>
           </div>
-          <a href="/" className="text-sm text-slate-500 hover:text-slate-900">← Dashboard</a>
+          <div className="flex items-center gap-4 text-sm">
+            <a href="/directory" className="text-slate-500 hover:text-slate-900">User directory →</a>
+            <a href="/" className="text-slate-500 hover:text-slate-900">← Dashboard</a>
+          </div>
         </div>
 
         {data && (

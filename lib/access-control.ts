@@ -3,7 +3,7 @@ import { siteAdminClient, siteServiceKey } from "@/lib/sites";
 import { SITE_ADAPTERS } from "@/lib/site-adapters";
 
 // Cryptographically strong temporary password, readable enough to hand over.
-function tempPassword(): string {
+export function tempPassword(): string {
   const bytes = new Uint32Array(6);
   crypto.getRandomValues(bytes);
   const A = "ABCDEFGHJKLMNPQRSTUVWXYZ";
