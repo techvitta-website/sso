@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { HubShell } from "@/components/HubShell";
 
 type SiteAccess = { siteId: string; name: string; display_name: string; hasAccess: boolean };
 type Row = { id: string; email: string; full_name: string | null; role: string; access: SiteAccess[] };
@@ -55,17 +56,10 @@ export default function AccessControlPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Access Control</h1>
-            <p className="text-sm text-slate-500">Grant or revoke each person&apos;s access to every connected app.</p>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <a href="/directory" className="text-slate-500 hover:text-slate-900">User directory →</a>
-            <a href="/" className="text-slate-500 hover:text-slate-900">← Dashboard</a>
-          </div>
+    <HubShell active="access">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">Access Control</h1>
+          <p className="text-sm text-slate-500">Grant or revoke each person&apos;s access to every connected app.</p>
         </div>
 
         {data && (
@@ -125,7 +119,6 @@ export default function AccessControlPage() {
         <p className="mt-4 text-xs text-slate-400">
           Granting creates the person&apos;s login inside that app; revoking suspends it (kept, not deleted, so history survives). Every action is written to the audit log.
         </p>
-      </div>
-    </div>
+    </HubShell>
   );
 }

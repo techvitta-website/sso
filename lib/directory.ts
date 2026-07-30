@@ -85,12 +85,24 @@ export type Person = {
   apps: Record<string, { role: string | null; status: string; lastSignIn: string | null; appUserId: string }>;
 };
 
+export type AppSummary = {
+  name: string;
+  display_name: string;
+  url: string | null;
+  connected: boolean;   // service key configured
+  reachable: boolean;   // we successfully listed its users
+  users: number;
+  active: number;
+  suspended: number;
+  lastActivity: string | null;
+};
+
 /** Live-read every connected app's users+roles and fold them by email. */
 export async function buildDirectory() {
   const central = createClient();
   const { data: sites } = await central
     .from("connected_sites")
-    .select("id, name, display_name, supabase_url")
+    .select("id, name, display_name, url, supabase_url")
     .eq("is_active", true)
     .order("name");
 
@@ -99,18 +111,45 @@ export async function buildDirectory() {
 
   const byEmail = new Map<string, Person>();
   const snapshotRows: any[] = [];
+  const appSummaries: AppSummary[] = [];
   const stamp = new Date().toISOString();
 
   for (const site of siteList) {
     const admin = siteAdminClient(site.supabase_url, site.name);
-    if (!admin) continue;
+    const summary: AppSummary = {
+      name: site.name,
+      display_name: site.display_name,
+      url: site.url ?? null,
+      connected: Boolean(admin),
+      reachable: false,
+      users: 0,
+      active: 0,
+      suspended: 0,
+      lastActivity: null,
+    };
+
+    if (!admin) {
+      appSummaries.push(summary);
+      continue;
+    }
+
     let users: DirectoryUser[] = [];
     try {
       users = await listAppUsers(admin, site.name);
+      summary.reachable = true;
     } catch {
+      appSummaries.push(summary);
       continue;
     }
+
+    summary.users = users.length;
     for (const u of users) {
+      if (u.status === "suspended") summary.suspended++;
+      else summary.active++;
+      if (u.lastSignIn && (!summary.lastActivity || u.lastSignIn > summary.lastActivity)) {
+        summary.lastActivity = u.lastSignIn;
+      }
+
       const key = u.email.toLowerCase();
       if (!key) continue;
       if (!byEmail.has(key)) byEmail.set(key, { email: u.email, apps: {} });
@@ -130,12 +169,14 @@ export async function buildDirectory() {
         synced_at: stamp,
       });
     }
+    appSummaries.push(summary);
   }
 
   const people = Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
   return {
     sites: siteList.map((s) => ({ id: s.id, name: s.name, display_name: s.display_name })),
     configured,
+    appSummaries,
     people,
     snapshotRows,
   };

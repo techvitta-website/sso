@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { HubShell } from "@/components/HubShell";
 
 type AppState = { role: string | null; status: string; lastSignIn: string | null; appUserId: string };
 type Person = { email: string; apps: Record<string, AppState> };
@@ -74,17 +75,10 @@ export default function DirectoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">User Directory</h1>
-            <p className="text-sm text-slate-500">Every person&apos;s logins and roles across all connected apps, in one place.</p>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
-            <a href="/access" className="text-slate-500 hover:text-slate-900">Access control →</a>
-            <a href="/" className="text-slate-500 hover:text-slate-900">← Dashboard</a>
-          </div>
+    <HubShell active="directory">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">User Directory</h1>
+          <p className="text-sm text-slate-500">Every person&apos;s logins and roles across all connected apps, in one place.</p>
         </div>
 
         {data && (
@@ -156,7 +150,6 @@ export default function DirectoryPage() {
         <p className="mt-4 text-xs text-slate-400">
           Read live from each app&apos;s database via its service key, and mirrored into the Master directory for tracking. Resetting a password sets a new temporary one in that app and is written to the audit log.
         </p>
-      </div>
-    </div>
+    </HubShell>
   );
 }
