@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { HubShell } from "@/components/HubShell";
 
 type SiteAccess = { siteId: string; name: string; display_name: string; hasAccess: boolean };
@@ -16,6 +16,8 @@ export default function AccessControlPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
 
   const load = useCallback(async () => {
     setError(null);
@@ -29,6 +31,20 @@ export default function AccessControlPage() {
 
   const connected = (name: string) =>
     data?.configured.find((c) => c.name === name)?.connected ?? false;
+
+  const roleOptions = useMemo(
+    () => Array.from(new Set((data?.users ?? []).map((u) => u.role).filter(Boolean))).sort(),
+    [data]
+  );
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const q = query.trim().toLowerCase();
+    return data.users.filter((u) => {
+      if (q && !(u.email.toLowerCase().includes(q) || (u.full_name ?? "").toLowerCase().includes(q))) return false;
+      if (roleFilter !== "all" && u.role !== roleFilter) return false;
+      return true;
+    });
+  }, [data, query, roleFilter]);
 
   async function toggle(user: Row, site: SiteAccess) {
     const action = site.hasAccess ? "revoke" : "provision";
@@ -72,6 +88,26 @@ export default function AccessControlPage() {
           </div>
         )}
 
+        {data && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+              className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-slate-900"
+            />
+            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              <option value="all">All roles</option>
+              {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            {(query || roleFilter !== "all") && (
+              <button onClick={() => { setQuery(""); setRoleFilter("all"); }} className="text-xs text-slate-500 hover:text-slate-900">Clear</button>
+            )}
+            <span className="ml-auto text-xs text-slate-500">{filtered.length} of {data.users.length}</span>
+          </div>
+        )}
+
         {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
         {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{notice}</div>}
 
@@ -87,7 +123,7 @@ export default function AccessControlPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.users.map((u) => (
+                {filtered.map((u) => (
                   <tr key={u.id} className="border-b border-slate-100">
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">{u.full_name || u.email}</div>

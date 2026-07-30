@@ -244,6 +244,32 @@ export async function resetAppPassword(actorId: string, email: string, appName: 
   return { ok: true, app: site.display_name, tempPassword: temp };
 }
 
+// Low-level: write a role into an app's OWN authorization model. `authId` is
+// the user's id in that app's Supabase Auth. Runs with the app's service key,
+// so it hits the app's real database directly (bypasses RLS) — authorization
+// changes take effect in that app immediately.
+async function writeAppRole(admin: SupabaseClient, appName: string, email: string, authId: string, role: string) {
+  if (appName === "sales") {
+    const { data: existing } = await admin.from("users").select("id").eq("id", authId).maybeSingle();
+    const res = existing
+      ? await admin.from("users").update({ role }).eq("id", authId)
+      : await admin.from("users").insert({ id: authId, email, role });
+    if (res.error) throw new Error(`Sales role write failed: ${res.error.message}`);
+  } else if (appName === "cms") {
+    const { data: existing } = await admin.from("hr_users").select("id").eq("email", email).maybeSingle();
+    const res = existing
+      ? await admin.from("hr_users").update({ role }).eq("email", email)
+      : await admin.from("hr_users").insert({ id: authId, email, name: email, role, password: "via-supabase-auth" });
+    if (res.error) throw new Error(`CMS role write failed: ${res.error.message}`);
+  } else if (appName === "hrms") {
+    const { data: roleRow } = await admin.from("roles").select("id").eq("name", role).maybeSingle();
+    if (!roleRow) throw new Error(`HRMS has no "${role}" role defined.`);
+    await admin.from("user_roles").delete().eq("user_id", authId);
+    const res = await admin.from("user_roles").insert({ user_id: authId, role_id: (roleRow as any).id });
+    if (res.error) throw new Error(`HRMS role write failed: ${res.error.message}`);
+  }
+}
+
 /** Change a person's role inside one app, written to that app's own role model. */
 export async function setAppRole(actorId: string, email: string, appName: string, role: string) {
   const allowed = APP_ROLES[appName];
@@ -251,34 +277,80 @@ export async function setAppRole(actorId: string, email: string, appName: string
   if (!allowed.includes(role)) {
     throw Object.assign(new Error(`Invalid role "${role}" for ${appName}. Allowed: ${allowed.join(", ")}.`), { status: 400 });
   }
-
   const { central, site, admin, user } = await appContext(appName, email);
-  const authId = user.id;
-
-  if (appName === "sales") {
-    const { data: existing } = await admin.from("users").select("id").eq("id", authId).maybeSingle();
-    const res = existing
-      ? await admin.from("users").update({ role }).eq("id", authId)
-      : await admin.from("users").insert({ id: authId, email, role });
-    if (res.error) throw Object.assign(new Error(`Sales role write failed: ${res.error.message}`), { status: 500 });
-  } else if (appName === "cms") {
-    const { data: existing } = await admin.from("hr_users").select("id").eq("email", email).maybeSingle();
-    const res = existing
-      ? await admin.from("hr_users").update({ role }).eq("email", email)
-      : await admin.from("hr_users").insert({ id: authId, email, name: email, role, password: "via-supabase-auth" });
-    if (res.error) throw Object.assign(new Error(`CMS role write failed: ${res.error.message}`), { status: 500 });
-  } else if (appName === "hrms") {
-    const { data: roleRow } = await admin.from("roles").select("id").eq("name", role).maybeSingle();
-    if (!roleRow) throw Object.assign(new Error(`HRMS has no "${role}" role defined.`), { status: 400 });
-    await admin.from("user_roles").delete().eq("user_id", authId);
-    const res = await admin.from("user_roles").insert({ user_id: authId, role_id: (roleRow as any).id });
-    if (res.error) throw Object.assign(new Error(`HRMS role write failed: ${res.error.message}`), { status: 500 });
+  try {
+    await writeAppRole(admin, appName, email, user.id, role);
+  } catch (e: any) {
+    throw Object.assign(new Error(e.message), { status: 500 });
   }
-
   await central.from("audit_logs").insert({
     user_id: null, event_type: "role.changed", app_name: appName, metadata: { email, role, by: actorId },
   });
   return { ok: true, app: site.display_name, role };
+}
+
+// Create (or re-enable) a login for one email inside one app and set its role —
+// writing to that app's real Auth + role table via its service key.
+async function provisionToApp(central: any, actorId: string, email: string, fullName: string | null, appName: string, role: string) {
+  const allowed = APP_ROLES[appName];
+  if (role && allowed && !allowed.includes(role)) {
+    throw Object.assign(new Error(`Invalid role "${role}" for ${appName}.`), { status: 400 });
+  }
+  const { data: site } = await central
+    .from("connected_sites").select("name, display_name, supabase_url").eq("name", appName).maybeSingle();
+  if (!site) throw Object.assign(new Error("Unknown app."), { status: 404 });
+  const admin = siteAdminClient(site.supabase_url, site.name);
+  if (!admin) throw Object.assign(new Error(`${site.display_name} has no service key configured.`), { status: 400 });
+
+  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  let user = (list?.users ?? []).find((u: any) => String(u.email ?? "").toLowerCase() === email.toLowerCase());
+  let tempPw: string | null = null;
+
+  if (!user) {
+    tempPw = tempPassword();
+    const { data: created, error } = await admin.auth.admin.createUser({
+      email, password: tempPw, email_confirm: true, user_metadata: { full_name: fullName },
+    });
+    if (error && !/already/i.test(error.message)) {
+      throw Object.assign(new Error(`Could not create login in ${site.display_name}: ${error.message}`), { status: 500 });
+    }
+    user = created?.user ?? undefined;
+    if (!user) {
+      const { data: relist } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      user = (relist?.users ?? []).find((u: any) => String(u.email ?? "").toLowerCase() === email.toLowerCase());
+    }
+  } else {
+    await admin.auth.admin.updateUserById(user.id, { ban_duration: "none" });
+  }
+  if (!user) throw Object.assign(new Error(`Could not resolve the ${site.display_name} login.`), { status: 500 });
+
+  if (role && allowed) await writeAppRole(admin, appName, email, user.id, role);
+
+  await central.from("audit_logs").insert({
+    user_id: null, event_type: "user.added", app_name: appName, metadata: { email, role, by: actorId },
+  });
+  return { app: appName, display_name: site.display_name, role: role || null, tempPassword: tempPw };
+}
+
+/** Add a user to one or more apps at once — real logins in each app's database. */
+export async function addUser(
+  actorId: string,
+  email: string,
+  fullName: string | null,
+  targets: { app: string; role: string }[],
+) {
+  if (!email) throw Object.assign(new Error("Email is required."), { status: 400 });
+  if (!targets?.length) throw Object.assign(new Error("Pick at least one app."), { status: 400 });
+  const central = createClient();
+  const results: any[] = [];
+  for (const t of targets) {
+    try {
+      results.push(await provisionToApp(central, actorId, email, fullName, t.app, t.role));
+    } catch (e: any) {
+      results.push({ app: t.app, error: e.message });
+    }
+  }
+  return { email, results };
 }
 
 /** Suspend or reactivate a person's login in one app. */

@@ -29,6 +29,14 @@ export default function DirectoryPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [appFilter, setAppFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showAdd, setShowAdd] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [targets, setTargets] = useState<Record<string, { include: boolean; role: string }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +62,19 @@ export default function DirectoryPage() {
     for (const p of data.people) logins += Object.keys(p.apps).length;
     return { people: data.people.length, logins };
   }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const q = query.trim().toLowerCase();
+    return data.people.filter((p) => {
+      if (q && !p.email.toLowerCase().includes(q)) return false;
+      const names = appFilter === "all" ? Object.keys(p.apps) : (p.apps[appFilter] ? [appFilter] : []);
+      if (appFilter !== "all" && names.length === 0) return false;
+      if (appFilter !== "all" && roleFilter !== "all" && (p.apps[appFilter]?.role ?? "") !== roleFilter) return false;
+      if (statusFilter !== "all" && !names.some((n) => p.apps[n].status === statusFilter)) return false;
+      return true;
+    });
+  }, [data, query, appFilter, roleFilter, statusFilter]);
 
   async function resetPw(email: string, app: string, display: string) {
     if (!confirm(`Reset ${email}'s password in ${display}? A new temporary password will be generated.`)) return;
@@ -106,12 +127,82 @@ export default function DirectoryPage() {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
 
+  async function submitAdd() {
+    const picks = Object.entries(targets).filter(([, v]) => v.include).map(([app, v]) => ({ app, role: v.role }));
+    if (!newEmail.trim() || picks.length === 0) { setError("Enter an email and pick at least one app."); return; }
+    setBusy("add"); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/directory/add-user", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail.trim(), fullName: newName.trim() || null, targets: picks }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed.");
+      const lines = (body.results || []).map((r: any) =>
+        r.error
+          ? `${r.app}: ${r.error}`
+          : `${r.display_name}: ${r.role || "no role"}${r.tempPassword ? ` (temp password ${r.tempPassword})` : " (existing login re-enabled)"}`
+      );
+      setNotice(`Added ${body.email} → ${lines.join(" · ")}`);
+      setShowAdd(false); setNewEmail(""); setNewName(""); setTargets({});
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
   return (
     <HubShell active="directory">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-slate-900">User Directory</h1>
-          <p className="text-sm text-slate-500">Every person&apos;s logins and roles across all connected apps, in one place.</p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">User Directory</h1>
+            <p className="text-sm text-slate-500">Every person&apos;s logins and roles across all connected apps, in one place.</p>
+          </div>
+          <button onClick={() => setShowAdd((v) => !v)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+            + Add user
+          </button>
         </div>
+
+        {showAdd && data && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 text-sm font-medium text-slate-700">Create a user in the apps you pick</div>
+            <div className="mb-3 grid gap-2 sm:grid-cols-2">
+              <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Email" type="email"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-slate-900" />
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name (optional)"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-slate-900" />
+            </div>
+            <div className="space-y-2">
+              {data.sites.map((s) => {
+                const roles = data.appRoles[s.name] || [];
+                const t = targets[s.name] || { include: false, role: roles[roles.length - 1] || "" };
+                return (
+                  <div key={s.id} className="flex items-center gap-3 text-sm">
+                    <label className="flex w-44 items-center gap-2">
+                      <input type="checkbox" checked={t.include}
+                        onChange={(e) => setTargets((p) => ({ ...p, [s.name]: { ...t, include: e.target.checked } }))} />
+                      {s.display_name}
+                    </label>
+                    {roles.length > 0 && (
+                      <select disabled={!t.include} value={t.role}
+                        onChange={(e) => setTargets((p) => ({ ...p, [s.name]: { ...t, role: e.target.value } }))}
+                        className="rounded border border-slate-200 px-2 py-1 text-xs disabled:opacity-40">
+                        {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={submitAdd} disabled={busy === "add"}
+                className="rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+                {busy === "add" ? "Creating…" : "Create user"}
+              </button>
+              <button onClick={() => setShowAdd(false)} className="rounded-lg border border-slate-200 px-4 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {data && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -127,13 +218,47 @@ export default function DirectoryPage() {
           </div>
         )}
 
+        {data && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search email…"
+              className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-slate-900"
+            />
+            <select value={appFilter} onChange={(e) => { setAppFilter(e.target.value); setRoleFilter("all"); }}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              <option value="all">All apps</option>
+              {data.sites.map((s) => <option key={s.id} value={s.name}>{s.display_name}</option>)}
+            </select>
+            {appFilter !== "all" && (data.appRoles[appFilter]?.length ?? 0) > 0 && (
+              <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+                <option value="all">All roles</option>
+                {data.appRoles[appFilter].map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            )}
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+              <option value="all">Any status</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+            {(query || appFilter !== "all" || roleFilter !== "all" || statusFilter !== "all") && (
+              <button onClick={() => { setQuery(""); setAppFilter("all"); setRoleFilter("all"); setStatusFilter("all"); }}
+                className="text-xs text-slate-500 hover:text-slate-900">Clear</button>
+            )}
+            <span className="ml-auto text-xs text-slate-500">{filtered.length} of {stats.people}</span>
+          </div>
+        )}
+
         {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
         {notice && <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{notice}</div>}
 
         {!data ? (
           <p className="text-slate-500">Loading the directory from every app…</p>
-        ) : data.people.length === 0 ? (
-          <p className="text-slate-500">No users found in any connected app.</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-slate-500">No users match your filters.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -144,7 +269,7 @@ export default function DirectoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.people.map((p) => (
+                {filtered.map((p) => (
                   <tr key={p.email} className="border-b border-slate-100 align-top">
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">{p.email}</div>
