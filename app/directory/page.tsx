@@ -8,6 +8,7 @@ type Person = { email: string; apps: Record<string, AppState> };
 type Dir = {
   sites: { id: string; name: string; display_name: string }[];
   configured: { name: string; connected: boolean }[];
+  appRoles: Record<string, string[]>;
   people: Person[];
 };
 
@@ -74,6 +75,37 @@ export default function DirectoryPage() {
     }
   }
 
+  async function changeRole(email: string, app: string, role: string, display: string) {
+    if (!role) return;
+    setBusy(`${email}:${app}`); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/directory/set-role", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, app, role }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed.");
+      setNotice(`Set ${email} to ${role} in ${display}.`);
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
+  async function toggleSuspend(email: string, app: string, currentlySuspended: boolean, display: string) {
+    const suspend = !currentlySuspended;
+    if (!confirm(`${suspend ? "Suspend" : "Reactivate"} ${email} in ${display}?`)) return;
+    setBusy(`${email}:${app}`); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/directory/suspend", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, app, suspend }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed.");
+      setNotice(`${suspend ? "Suspended" : "Reactivated"} ${email} in ${display}.`);
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
   return (
     <HubShell active="directory">
         <div className="mb-6">
@@ -122,20 +154,39 @@ export default function DirectoryPage() {
                       const a = p.apps[s.name];
                       if (!a) return <td key={s.id} className="px-4 py-3 text-slate-300">—</td>;
                       const suspended = a.status === "suspended";
+                      const key = `${p.email}:${s.name}`;
+                      const roles = data.appRoles[s.name] || [];
+                      const working = busy === key;
                       return (
                         <td key={s.id} className="px-4 py-3">
-                          <div className="flex flex-col gap-1">
-                            <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium ${suspended ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"}`}>
-                              {a.role || "no role"}{suspended ? " · suspended" : ""}
-                            </span>
+                          <div className="flex flex-col gap-1.5">
+                            {roles.length ? (
+                              <select
+                                value={a.role ?? ""}
+                                disabled={working}
+                                onChange={(e) => changeRole(p.email, s.name, e.target.value, s.display_name)}
+                                className="w-fit rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-700 disabled:opacity-50"
+                              >
+                                {!a.role && <option value="">no role</option>}
+                                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                              </select>
+                            ) : (
+                              <span className="text-xs text-slate-600">{a.role || "no role"}</span>
+                            )}
+                            {suspended && (
+                              <span className="w-fit rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">suspended</span>
+                            )}
                             <span className="text-[11px] text-slate-400">seen {ago(a.lastSignIn)}</span>
-                            <button
-                              disabled={busy === `${p.email}:${s.name}`}
-                              onClick={() => resetPw(p.email, s.name, s.display_name)}
-                              className="w-fit rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40"
-                            >
-                              {busy === `${p.email}:${s.name}` ? "…" : "Reset password"}
-                            </button>
+                            <div className="flex gap-1.5">
+                              <button disabled={working} onClick={() => toggleSuspend(p.email, s.name, suspended, s.display_name)}
+                                className={`rounded px-1 py-0.5 text-[11px] font-medium disabled:opacity-40 ${suspended ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+                                {suspended ? "Reactivate" : "Suspend"}
+                              </button>
+                              <button disabled={working} onClick={() => resetPw(p.email, s.name, s.display_name)}
+                                className="rounded px-1 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
+                                {working ? "…" : "Reset pw"}
+                              </button>
+                            </div>
                           </div>
                         </td>
                       );

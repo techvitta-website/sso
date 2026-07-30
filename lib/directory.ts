@@ -193,8 +193,16 @@ export async function persistSnapshot(snapshotRows: any[]) {
   }
 }
 
-/** Reset a person's password inside one app, using that app's service key. */
-export async function resetAppPassword(actorId: string, email: string, appName: string) {
+// Each app's own role vocabulary — what the SSO console can assign.
+export const APP_ROLES: Record<string, string[]> = {
+  sales: ["owner", "manager", "salesman"],
+  cms: ["admin", "hr", "editor", "author", "user"],
+  hrms: ["Admin", "HR", "Employee", "Client"],
+};
+
+// Resolve site + admin client + the app's auth user for one email. Shared by
+// every management action so the "which app / has a login?" checks live once.
+async function appContext(appName: string, email: string) {
   const central = createClient();
   const { data: site } = await central
     .from("connected_sites")
@@ -221,17 +229,70 @@ export async function resetAppPassword(actorId: string, email: string, appName: 
       { status: 404 }
     );
   }
+  return { central, site: site as any, admin, user };
+}
 
+/** Reset a person's password inside one app, using that app's service key. */
+export async function resetAppPassword(actorId: string, email: string, appName: string) {
+  const { central, site, admin, user } = await appContext(appName, email);
   const temp = tempPassword();
   const { error } = await admin.auth.admin.updateUserById(user.id, { password: temp });
   if (error) throw Object.assign(new Error(`Could not reset password: ${error.message}`), { status: 500 });
+  await central.from("audit_logs").insert({
+    user_id: null, event_type: "password.reset", app_name: appName, metadata: { email, by: actorId },
+  });
+  return { ok: true, app: site.display_name, tempPassword: temp };
+}
+
+/** Change a person's role inside one app, written to that app's own role model. */
+export async function setAppRole(actorId: string, email: string, appName: string, role: string) {
+  const allowed = APP_ROLES[appName];
+  if (!allowed) throw Object.assign(new Error(`${appName} has no managed roles.`), { status: 400 });
+  if (!allowed.includes(role)) {
+    throw Object.assign(new Error(`Invalid role "${role}" for ${appName}. Allowed: ${allowed.join(", ")}.`), { status: 400 });
+  }
+
+  const { central, site, admin, user } = await appContext(appName, email);
+  const authId = user.id;
+
+  if (appName === "sales") {
+    const { data: existing } = await admin.from("users").select("id").eq("id", authId).maybeSingle();
+    const res = existing
+      ? await admin.from("users").update({ role }).eq("id", authId)
+      : await admin.from("users").insert({ id: authId, email, role });
+    if (res.error) throw Object.assign(new Error(`Sales role write failed: ${res.error.message}`), { status: 500 });
+  } else if (appName === "cms") {
+    const { data: existing } = await admin.from("hr_users").select("id").eq("email", email).maybeSingle();
+    const res = existing
+      ? await admin.from("hr_users").update({ role }).eq("email", email)
+      : await admin.from("hr_users").insert({ id: authId, email, name: email, role, password: "via-supabase-auth" });
+    if (res.error) throw Object.assign(new Error(`CMS role write failed: ${res.error.message}`), { status: 500 });
+  } else if (appName === "hrms") {
+    const { data: roleRow } = await admin.from("roles").select("id").eq("name", role).maybeSingle();
+    if (!roleRow) throw Object.assign(new Error(`HRMS has no "${role}" role defined.`), { status: 400 });
+    await admin.from("user_roles").delete().eq("user_id", authId);
+    const res = await admin.from("user_roles").insert({ user_id: authId, role_id: (roleRow as any).id });
+    if (res.error) throw Object.assign(new Error(`HRMS role write failed: ${res.error.message}`), { status: 500 });
+  }
 
   await central.from("audit_logs").insert({
+    user_id: null, event_type: "role.changed", app_name: appName, metadata: { email, role, by: actorId },
+  });
+  return { ok: true, app: site.display_name, role };
+}
+
+/** Suspend or reactivate a person's login in one app. */
+export async function setSuspended(actorId: string, email: string, appName: string, suspend: boolean) {
+  const { central, site, admin, user } = await appContext(appName, email);
+  const { error } = await admin.auth.admin.updateUserById(user.id, {
+    ban_duration: suspend ? "876000h" : "none",
+  });
+  if (error) throw Object.assign(new Error(`Could not update login: ${error.message}`), { status: 500 });
+  await central.from("audit_logs").insert({
     user_id: null,
-    event_type: "password.reset",
+    event_type: suspend ? "access.suspended" : "access.reactivated",
     app_name: appName,
     metadata: { email, by: actorId },
   });
-
-  return { ok: true, app: (site as any).display_name, tempPassword: temp };
+  return { ok: true, app: site.display_name, suspended: suspend };
 }

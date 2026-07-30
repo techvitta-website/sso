@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/require-admin";
-import { buildDirectory, persistSnapshot } from "@/lib/directory";
+import { buildDirectory, persistSnapshot, APP_ROLES } from "@/lib/directory";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function GET() {
     await persistSnapshot(dir.snapshotRows);
     const { snapshotRows: _drop, ...out } = dir;
     void _drop;
-    return NextResponse.json(out);
+    return NextResponse.json({ ...out, appRoles: APP_ROLES });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: e.status ?? 500 });
   }
