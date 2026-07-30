@@ -14,6 +14,8 @@ const APPS: { name: string; url: string }[] = [
   { name: "Sales CRM", url: "https://sales.techvitta.in" },
   { name: "HRMS", url: "https://hrms.techvitta.in" },
   { name: "CMS", url: "https://cms.techvitta.in" },
+  { name: "BRMS", url: "https://brms.techvitta.in" },
+  { name: "Garage", url: "https://garage.techvitta.in" },
 ];
 
 // One shell for the whole hub so every page shares the same identity + nav.
