@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { HubShell } from "@/components/HubShell";
 
-type AppState = { role: string | null; status: string; lastSignIn: string | null; appUserId: string };
+type AppState = { role: string | null; status: string; lastSignIn: string | null; appUserId: string; online: boolean };
 type Person = { email: string; apps: Record<string, AppState> };
 type Dir = {
   sites: { id: string; name: string; display_name: string }[];
@@ -333,7 +333,11 @@ export default function DirectoryPage() {
                             {suspended && (
                               <span className="w-fit rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">suspended</span>
                             )}
-                            <span className="text-[11px] text-slate-400">seen {ago(a.lastSignIn)}</span>
+                            <span className="text-[11px]">
+                              {a.online
+                                ? <span className="font-medium text-sky-600">● live now</span>
+                                : <span className="text-slate-400">seen {ago(a.lastSignIn)}</span>}
+                            </span>
                             <div className="flex gap-1.5">
                               <button disabled={working} onClick={() => toggleSuspend(p.email, s.name, suspended, s.display_name)}
                                 className={`rounded px-1 py-0.5 text-[11px] font-medium disabled:opacity-40 ${suspended ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>

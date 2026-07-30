@@ -82,18 +82,19 @@ async function listAppUsers(admin: SupabaseClient, appName: string): Promise<Dir
 
 export type Person = {
   email: string;
-  apps: Record<string, { role: string | null; status: string; lastSignIn: string | null; appUserId: string }>;
+  apps: Record<string, { role: string | null; status: string; lastSignIn: string | null; appUserId: string; online: boolean }>;
 };
 
 export type AppSummary = {
   name: string;
   display_name: string;
   url: string | null;
-  connected: boolean;   // service key configured
-  reachable: boolean;   // we successfully listed its users
+  connected: boolean;      // service key configured
+  reachable: boolean;      // we successfully listed its users (DB healthy)
   users: number;
   active: number;
   suspended: number;
+  activeSessions: number;  // users with a live login session right now
   lastActivity: string | null;
 };
 
@@ -125,6 +126,7 @@ export async function buildDirectory() {
       users: 0,
       active: 0,
       suspended: 0,
+      activeSessions: 0,
       lastActivity: null,
     };
 
@@ -142,6 +144,15 @@ export async function buildDirectory() {
       continue;
     }
 
+    // Who has a live login session in this app right now (best-effort: needs
+    // the sso_active_sessions() function installed in the app DB).
+    const onlineEmails = new Set<string>();
+    try {
+      const { data: sess } = await admin.rpc("sso_active_sessions");
+      for (const r of (sess ?? []) as any[]) if (r?.email) onlineEmails.add(String(r.email).toLowerCase());
+    } catch { /* function not installed in this app yet */ }
+    summary.activeSessions = onlineEmails.size;
+
     summary.users = users.length;
     for (const u of users) {
       if (u.status === "suspended") summary.suspended++;
@@ -158,6 +169,7 @@ export async function buildDirectory() {
         status: u.status,
         lastSignIn: u.lastSignIn,
         appUserId: u.appUserId,
+        online: onlineEmails.has(key),
       };
       snapshotRows.push({
         email: u.email,

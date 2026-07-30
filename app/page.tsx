@@ -12,10 +12,11 @@ type AppSummary = {
   users: number;
   active: number;
   suspended: number;
+  activeSessions: number;
   lastActivity: string | null;
 };
-type Totals = { apps: number; connected: number; people: number; logins: number; suspended: number };
-type Overview = { apps: AppSummary[]; totals: Totals };
+type Totals = { apps: number; connected: number; healthy: number; people: number; logins: number; suspended: number; online: number };
+type Overview = { apps: AppSummary[]; totals: Totals; master: { reachable: boolean } };
 
 function ago(iso: string | null): string {
   if (!iso) return "no activity";
@@ -76,10 +77,15 @@ export default function OverviewPage() {
         <p className="text-slate-500">Loading usage from every app…</p>
       ) : (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Apps connected" value={`${data.totals.connected}/${data.totals.apps}`} />
+          <div className="mb-3 flex items-center gap-2 text-xs text-slate-500">
+            <span className={`h-2 w-2 rounded-full ${data.master.reachable ? "bg-emerald-500" : "bg-red-500"}`} />
+            Master database: {data.master.reachable ? "healthy" : "unreachable"}
+          </div>
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Stat label="Apps healthy" value={`${data.totals.healthy}/${data.totals.apps}`} />
             <Stat label="People" value={data.totals.people} />
             <Stat label="Total logins" value={data.totals.logins} />
+            <Stat label="Online now" value={data.totals.online} />
             <Stat label="Suspended" value={data.totals.suspended} tone={data.totals.suspended ? "warn" : undefined} />
           </div>
 
@@ -103,9 +109,10 @@ export default function OverviewPage() {
                     </span>
                   </div>
                   {a.connected && a.reachable ? (
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="grid grid-cols-4 gap-2 text-center">
                       <div><div className="text-lg font-semibold text-slate-900">{a.users}</div><div className="text-[11px] uppercase text-slate-400">users</div></div>
                       <div><div className="text-lg font-semibold text-emerald-600">{a.active}</div><div className="text-[11px] uppercase text-slate-400">active</div></div>
+                      <div><div className="text-lg font-semibold text-sky-600">{a.activeSessions}</div><div className="text-[11px] uppercase text-slate-400">online</div></div>
                       <div><div className="text-lg font-semibold text-amber-600">{a.suspended}</div><div className="text-[11px] uppercase text-slate-400">suspended</div></div>
                     </div>
                   ) : (

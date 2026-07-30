@@ -13,11 +13,14 @@ export async function GET() {
     const totals = {
       apps: dir.appSummaries.length,
       connected: dir.appSummaries.filter((a) => a.connected).length,
+      healthy: dir.appSummaries.filter((a) => a.connected && a.reachable).length,
       people: dir.people.length,
       logins: dir.appSummaries.reduce((n, a) => n + a.users, 0),
       suspended: dir.appSummaries.reduce((n, a) => n + a.suspended, 0),
+      online: dir.appSummaries.reduce((n, a) => n + a.activeSessions, 0),
     };
-    return NextResponse.json({ apps: dir.appSummaries, totals });
+    // Reaching here means requireAdmin() successfully read the Master DB.
+    return NextResponse.json({ apps: dir.appSummaries, totals, master: { reachable: true } });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: e.status ?? 500 });
   }
