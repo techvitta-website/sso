@@ -9,6 +9,13 @@ const TABS: { key: Tab; label: string; href: string }[] = [
   { key: "access", label: "Access & Users", href: "/directory" },
 ];
 
+// Quick links to each live app, so an admin can jump over and check logins.
+const APPS: { name: string; url: string }[] = [
+  { name: "Sales CRM", url: "https://sales.techvitta.in" },
+  { name: "HRMS", url: "https://hrms.techvitta.in" },
+  { name: "CMS", url: "https://cms.techvitta.in" },
+];
+
 // One shell for the whole hub so every page shares the same identity + nav.
 export function HubShell({ active, children }: { active: Tab; children: React.ReactNode }) {
   async function signOut() {
@@ -53,6 +60,17 @@ export function HubShell({ active, children }: { active: Tab; children: React.Re
           </button>
         </div>
       </header>
+      <div className="border-b border-slate-100 bg-slate-50">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-1.5 text-xs">
+          <span className="text-slate-400">Open app:</span>
+          {APPS.map((a) => (
+            <a key={a.name} href={a.url} target="_blank" rel="noreferrer"
+              className="font-medium text-slate-500 hover:text-slate-900">
+              {a.name} ↗
+            </a>
+          ))}
+        </div>
+      </div>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
     </div>
   );
