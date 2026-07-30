@@ -77,18 +77,23 @@ export default function DirectoryPage() {
   }, [data, query, appFilter, roleFilter, statusFilter]);
 
   async function resetPw(email: string, app: string, display: string) {
-    if (!confirm(`Reset ${email}'s password in ${display}? A new temporary password will be generated.`)) return;
+    const input = prompt(`New password for ${email} in ${display}\n\nType a password to set it, or leave blank to generate a random temporary one:`, "");
+    if (input === null) return; // cancelled
+    const custom = input.trim().length > 0;
+    if (custom && input.trim().length < 6) { setError("Password must be at least 6 characters."); return; }
     setBusy(`${email}:${app}`);
     setError(null); setNotice(null);
     try {
       const res = await fetch("/api/directory/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, app }),
+        body: JSON.stringify({ email, app, password: custom ? input.trim() : undefined }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed.");
-      setNotice(`Reset ${email} in ${display}. Temporary password: ${body.tempPassword} — share it and ask them to change it.`);
+      setNotice(body.custom
+        ? `Set a new password for ${email} in ${display}.`
+        : `Reset ${email} in ${display}. Temporary password: ${body.tempPassword} — share it and ask them to change it.`);
     } catch (e: any) {
       setError(e.message);
     } finally {

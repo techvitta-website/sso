@@ -33,8 +33,8 @@ export default function SignInPage() {
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 6c.9 1.3 2.4 2 4.4 2 1.5 0 2.9-.4 4.1-1-1.2 2.6-3.4 4-5.7 4.2l3.2 5.3-4.2-2.7L12 21l-1.8-7.2L6 16.5l3.2-5.3C6.9 11 4.7 9.6 3.5 7c1.2.6 2.6 1 4.1 1 2 0 3.5-.7 4.4-2z" />
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-slate-900">TechVitta Identity</h1>

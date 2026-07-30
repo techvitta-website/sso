@@ -244,16 +244,23 @@ async function appContext(appName: string, email: string) {
   return { central, site: site as any, admin, user };
 }
 
-/** Reset a person's password inside one app, using that app's service key. */
-export async function resetAppPassword(actorId: string, email: string, appName: string) {
+/**
+ * Set a person's password inside one app. If `password` is given (>= 6 chars)
+ * it's used verbatim; otherwise a random temporary one is generated and
+ * returned so the admin can hand it over.
+ */
+export async function resetAppPassword(actorId: string, email: string, appName: string, password?: string) {
   const { central, site, admin, user } = await appContext(appName, email);
-  const temp = tempPassword();
-  const { error } = await admin.auth.admin.updateUserById(user.id, { password: temp });
-  if (error) throw Object.assign(new Error(`Could not reset password: ${error.message}`), { status: 500 });
+  const custom = typeof password === "string" && password.trim().length >= 6;
+  const pw = custom ? password!.trim() : tempPassword();
+  const { error } = await admin.auth.admin.updateUserById(user.id, { password: pw });
+  if (error) throw Object.assign(new Error(`Could not set password: ${error.message}`), { status: 500 });
   await central.from("audit_logs").insert({
-    user_id: null, event_type: "password.reset", app_name: appName, metadata: { email, by: actorId },
+    user_id: null, event_type: "password.reset", app_name: appName, metadata: { email, custom, by: actorId },
   });
-  return { ok: true, app: site.display_name, tempPassword: temp };
+  // Never echo a chosen password back (the admin already has it); only return
+  // the generated temp one.
+  return { ok: true, app: site.display_name, tempPassword: custom ? null : pw, custom };
 }
 
 // Low-level: write a role into an app's OWN authorization model. `authId` is

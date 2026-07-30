@@ -26,8 +26,8 @@ export function HubShell({ active, children }: { active: Tab; children: React.Re
           <div className="flex items-center gap-6">
             <a href="/" className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-white">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 6c.9 1.3 2.4 2 4.4 2 1.5 0 2.9-.4 4.1-1-1.2 2.6-3.4 4-5.7 4.2l3.2 5.3-4.2-2.7L12 21l-1.8-7.2L6 16.5l3.2-5.3C6.9 11 4.7 9.6 3.5 7c1.2.6 2.6 1 4.1 1 2 0 3.5-.7 4.4-2z" />
                 </svg>
               </span>
               <span className="text-sm font-semibold text-slate-900">TechVitta Identity</span>
