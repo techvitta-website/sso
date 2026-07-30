@@ -6,8 +6,7 @@ type Tab = "overview" | "access" | "directory";
 
 const TABS: { key: Tab; label: string; href: string }[] = [
   { key: "overview", label: "Overview", href: "/" },
-  { key: "access", label: "Access", href: "/access" },
-  { key: "directory", label: "Directory", href: "/directory" },
+  { key: "access", label: "Access & Users", href: "/directory" },
 ];
 
 // One shell for the whole hub so every page shares the same identity + nav.

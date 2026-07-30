@@ -149,12 +149,30 @@ export default function DirectoryPage() {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
 
+  async function grantApp(email: string, app: string, display: string) {
+    const roles = data?.appRoles[app] || [];
+    const role = roles[roles.length - 1] || "";
+    if (!confirm(`Give ${email} a login in ${display}${role ? ` as ${role}` : ""}?`)) return;
+    setBusy(`${email}:${app}`); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/directory/add-user", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, fullName: null, targets: [{ app, role }] }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed.");
+      const r = (body.results || [])[0] || {};
+      setNotice(r.error ? `${display}: ${r.error}` : `Granted ${email} → ${display}${r.tempPassword ? ` (temp password ${r.tempPassword})` : ""}.`);
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
   return (
-    <HubShell active="directory">
+    <HubShell active="access">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">User Directory</h1>
-            <p className="text-sm text-slate-500">Every person&apos;s logins and roles across all connected apps, in one place.</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Access &amp; Users</h1>
+            <p className="text-sm text-slate-500">Every user across all connected apps — grant access, set roles, suspend, and reset passwords, all from here.</p>
           </div>
           <button onClick={() => setShowAdd((v) => !v)} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
             + Add user
@@ -277,7 +295,21 @@ export default function DirectoryPage() {
                     </td>
                     {data.sites.map((s) => {
                       const a = p.apps[s.name];
-                      if (!a) return <td key={s.id} className="px-4 py-3 text-slate-300">—</td>;
+                      if (!a) {
+                        const canGrant = connected(s.name);
+                        return (
+                          <td key={s.id} className="px-4 py-3">
+                            <button
+                              disabled={!canGrant || busy === `${p.email}:${s.name}`}
+                              onClick={() => grantApp(p.email, s.name, s.display_name)}
+                              title={canGrant ? "Create a login in this app" : "Service key not set for this app"}
+                              className="rounded px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40"
+                            >
+                              {busy === `${p.email}:${s.name}` ? "…" : "+ Grant"}
+                            </button>
+                          </td>
+                        );
+                      }
                       const suspended = a.status === "suspended";
                       const key = `${p.email}:${s.name}`;
                       const roles = data.appRoles[s.name] || [];
