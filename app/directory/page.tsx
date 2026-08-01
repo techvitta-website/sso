@@ -169,7 +169,11 @@ export default function DirectoryPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Failed.");
-      setNotice(`Deleted ${email} from ${display}.`);
+      setNotice(
+        body.loginRemoval === "disabled"
+          ? `Deleted ${email} from ${display} — the login was disabled rather than hard-deleted because app records still reference it; they can no longer sign in.`
+          : `Deleted ${email} from ${display}.`
+      );
       await load();
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
