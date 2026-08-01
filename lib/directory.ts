@@ -387,3 +387,72 @@ export async function setSuspended(actorId: string, email: string, appName: stri
   });
   return { ok: true, app: site.display_name, suspended: suspend };
 }
+
+// Low-level: remove a person's app-specific authorization/data rows from an
+// app's OWN model. Mirror of writeAppRole, but deleting. `authId` is the
+// user's id in that app's Supabase Auth. Runs with the app's service key, so it
+// hits the app's real database directly (bypasses RLS).
+async function deleteAppRows(admin: SupabaseClient, appName: string, email: string, authId: string) {
+  if (appName === "sales") {
+    // Sales keys public.users by the auth id; also clear any legacy
+    // email-keyed row so nothing is left behind.
+    const byId = await admin.from("users").delete().eq("id", authId);
+    if (byId.error) throw new Error(`Sales row delete failed: ${byId.error.message}`);
+    const byEmail = await admin.from("users").delete().eq("email", email);
+    if (byEmail.error) throw new Error(`Sales row delete failed: ${byEmail.error.message}`);
+  } else if (appName === "cms") {
+    // CMS authorization lives in hr_users, keyed by email.
+    const res = await admin.from("hr_users").delete().eq("email", email);
+    if (res.error) throw new Error(`CMS row delete failed: ${res.error.message}`);
+  } else if (appName === "hrms") {
+    // HRMS authorization lives in user_roles, keyed by the auth user id.
+    const res = await admin.from("user_roles").delete().eq("user_id", authId);
+    if (res.error) throw new Error(`HRMS row delete failed: ${res.error.message}`);
+  }
+  // Apps with no extra authorization table (e.g. pure Supabase Auth) — the auth
+  // account deletion below is all that's needed.
+}
+
+/**
+ * Permanently delete a person from one app: their app-specific authorization
+ * data (hr_users / users / user_roles) AND their Supabase Auth login. Access is
+ * revoked immediately and the person stops appearing in that app's column.
+ *
+ * The app's own rows are removed first; only if that succeeds is the login
+ * deleted, so a mid-way failure never leaves a deleted login with orphaned data
+ * that the admin can't see to retry. Deletes are idempotent, so a retry after a
+ * partial failure is safe.
+ */
+export async function deleteAppUser(actorId: string, email: string, appName: string) {
+  const { central, site, admin, user } = await appContext(appName, email);
+  const authId = user.id;
+
+  // 1) Remove the app's own authorization/data rows.
+  try {
+    await deleteAppRows(admin, appName, email, authId);
+  } catch (e: any) {
+    throw Object.assign(new Error(e.message), { status: 500 });
+  }
+
+  // 2) Remove the Supabase Auth login itself.
+  const { error: authErr } = await admin.auth.admin.deleteUser(authId);
+  if (authErr) {
+    throw Object.assign(
+      new Error(`Removed app data but could not delete the login: ${authErr.message}`),
+      { status: 500 }
+    );
+  }
+
+  // 3) Drop the Master snapshot row so the directory doesn't show a stale entry.
+  try {
+    await central.from("app_user_directory").delete().eq("email", email).eq("app_name", appName);
+  } catch {
+    /* snapshot table optional — live directory reads from Auth anyway */
+  }
+
+  await central.from("audit_logs").insert({
+    user_id: null, event_type: "user.deleted", app_name: appName, metadata: { email, by: actorId },
+  });
+
+  return { ok: true, app: site.display_name, deleted: true };
+}

@@ -154,6 +154,26 @@ export default function DirectoryPage() {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
 
+  async function deleteUser(email: string, app: string, display: string) {
+    if (!confirm(
+      `Permanently delete ${email} from ${display}?\n\n` +
+      `This removes their login AND their data in ${display} (role / profile row). ` +
+      `They will be signed out and can no longer sign in to ${display} or reach it through this hub. ` +
+      `This cannot be undone.`
+    )) return;
+    setBusy(`${email}:${app}`); setError(null); setNotice(null);
+    try {
+      const res = await fetch("/api/directory/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, app }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Failed.");
+      setNotice(`Deleted ${email} from ${display}.`);
+      await load();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
   async function grantApp(email: string, app: string, display: string) {
     const roles = data?.appRoles[app] || [];
     const role = roles[roles.length - 1] || "";
@@ -352,6 +372,11 @@ export default function DirectoryPage() {
                                 className="rounded px-1 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
                                 {working ? "…" : "Reset pw"}
                               </button>
+                              <button disabled={working} onClick={() => deleteUser(p.email, s.name, s.display_name)}
+                                title={`Permanently delete this login and its data in ${s.display_name}`}
+                                className="rounded px-1 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
+                                {working ? "…" : "Delete"}
+                              </button>
                             </div>
                           </div>
                         </td>
@@ -365,7 +390,7 @@ export default function DirectoryPage() {
         )}
 
         <p className="mt-4 text-xs text-slate-400">
-          Read live from each app&apos;s database via its service key, and mirrored into the Master directory for tracking. Resetting a password sets a new temporary one in that app and is written to the audit log.
+          Read live from each app&apos;s database via its service key, and mirrored into the Master directory for tracking. Resetting a password sets a new temporary one in that app; Delete permanently removes that login and its data in that app. Both are written to the audit log.
         </p>
     </HubShell>
   );
