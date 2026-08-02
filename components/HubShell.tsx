@@ -32,8 +32,8 @@ export function HubShell({ active, children }: { active: Tab; children: React.Re
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-6">
             <a href="/" className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-white">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -64,7 +64,7 @@ export function HubShell({ active, children }: { active: Tab; children: React.Re
         </div>
       </header>
       <div className="border-b border-slate-100 bg-slate-50">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-6 py-1.5 text-xs">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 text-xs sm:px-6">
           <span className="text-slate-400">Open app:</span>
           {APPS.map((a) => (
             <a key={a.name} href={a.url} target="_blank" rel="noreferrer"
@@ -74,7 +74,7 @@ export function HubShell({ active, children }: { active: Tab; children: React.Re
           ))}
         </div>
       </div>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }
