@@ -196,6 +196,69 @@ export default function DirectoryPage() {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
 
+  // One app's controls for one person — shared by the desktop table cells and
+  // the mobile card layout so behaviour stays identical on both.
+  function appControls(p: Person, s: { id: string; name: string; display_name: string }) {
+    const a = p.apps[s.name];
+    if (!a) {
+      const canGrant = connected(s.name);
+      return (
+        <button
+          disabled={!canGrant || busy === `${p.email}:${s.name}`}
+          onClick={() => grantApp(p.email, s.name, s.display_name)}
+          title={canGrant ? "Create a login in this app" : "Service key not set for this app"}
+          className="rounded px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40"
+        >
+          {busy === `${p.email}:${s.name}` ? "…" : "+ Grant"}
+        </button>
+      );
+    }
+    const suspended = a.status === "suspended";
+    const key = `${p.email}:${s.name}`;
+    const roles = data?.appRoles[s.name] || [];
+    const working = busy === key;
+    return (
+      <div className="flex flex-col gap-1.5">
+        {roles.length ? (
+          <select
+            value={a.role ?? ""}
+            disabled={working}
+            onChange={(e) => changeRole(p.email, s.name, e.target.value, s.display_name)}
+            className="w-fit rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-700 disabled:opacity-50"
+          >
+            {!a.role && <option value="">no role</option>}
+            {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        ) : (
+          <span className="text-xs text-slate-600">{a.role || "no role"}</span>
+        )}
+        {suspended && (
+          <span className="w-fit rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">suspended</span>
+        )}
+        <span className="text-[11px]">
+          {a.online
+            ? <span className="font-medium text-sky-600">● live now</span>
+            : <span className="text-slate-400">seen {ago(a.lastSignIn)}</span>}
+        </span>
+        <div className="flex gap-1.5">
+          <button disabled={working} onClick={() => toggleSuspend(p.email, s.name, suspended, s.display_name)}
+            className={`rounded px-1 py-0.5 text-[11px] font-medium disabled:opacity-40 ${suspended ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+            {suspended ? "Reactivate" : "Suspend"}
+          </button>
+          <button disabled={working} onClick={() => resetPw(p.email, s.name, s.display_name)}
+            className="rounded px-1 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
+            {working ? "…" : "Reset pw"}
+          </button>
+          <button disabled={working} onClick={() => deleteUser(p.email, s.name, s.display_name)}
+            title={`Permanently delete this login and its data in ${s.display_name}`}
+            className="rounded px-1 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
+            {working ? "…" : "Delete"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <HubShell active="access">
         <div className="mb-6 flex items-start justify-between">
@@ -307,90 +370,54 @@ export default function DirectoryPage() {
         ) : filtered.length === 0 ? (
           <p className="text-slate-500">No users match your filters.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
-                  <th className="px-4 py-3">Person</th>
-                  {data.sites.map((s) => <th key={s.id} className="px-4 py-3 text-left">{s.display_name}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => (
-                  <tr key={p.email} className="border-b border-slate-100 align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">{p.email}</div>
-                      <div className="text-xs text-slate-400">{Object.keys(p.apps).length} app{Object.keys(p.apps).length === 1 ? "" : "s"}</div>
-                    </td>
-                    {data.sites.map((s) => {
-                      const a = p.apps[s.name];
-                      if (!a) {
-                        const canGrant = connected(s.name);
-                        return (
-                          <td key={s.id} className="px-4 py-3">
-                            <button
-                              disabled={!canGrant || busy === `${p.email}:${s.name}`}
-                              onClick={() => grantApp(p.email, s.name, s.display_name)}
-                              title={canGrant ? "Create a login in this app" : "Service key not set for this app"}
-                              className="rounded px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40"
-                            >
-                              {busy === `${p.email}:${s.name}` ? "…" : "+ Grant"}
-                            </button>
-                          </td>
-                        );
-                      }
-                      const suspended = a.status === "suspended";
-                      const key = `${p.email}:${s.name}`;
-                      const roles = data.appRoles[s.name] || [];
-                      const working = busy === key;
-                      return (
-                        <td key={s.id} className="px-4 py-3">
-                          <div className="flex flex-col gap-1.5">
-                            {roles.length ? (
-                              <select
-                                value={a.role ?? ""}
-                                disabled={working}
-                                onChange={(e) => changeRole(p.email, s.name, e.target.value, s.display_name)}
-                                className="w-fit rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs text-slate-700 disabled:opacity-50"
-                              >
-                                {!a.role && <option value="">no role</option>}
-                                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
-                              </select>
-                            ) : (
-                              <span className="text-xs text-slate-600">{a.role || "no role"}</span>
-                            )}
-                            {suspended && (
-                              <span className="w-fit rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">suspended</span>
-                            )}
-                            <span className="text-[11px]">
-                              {a.online
-                                ? <span className="font-medium text-sky-600">● live now</span>
-                                : <span className="text-slate-400">seen {ago(a.lastSignIn)}</span>}
-                            </span>
-                            <div className="flex gap-1.5">
-                              <button disabled={working} onClick={() => toggleSuspend(p.email, s.name, suspended, s.display_name)}
-                                className={`rounded px-1 py-0.5 text-[11px] font-medium disabled:opacity-40 ${suspended ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
-                                {suspended ? "Reactivate" : "Suspend"}
-                              </button>
-                              <button disabled={working} onClick={() => resetPw(p.email, s.name, s.display_name)}
-                                className="rounded px-1 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40">
-                                {working ? "…" : "Reset pw"}
-                              </button>
-                              <button disabled={working} onClick={() => deleteUser(p.email, s.name, s.display_name)}
-                                title={`Permanently delete this login and its data in ${s.display_name}`}
-                                className="rounded px-1 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
-                                {working ? "…" : "Delete"}
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      );
-                    })}
+          <>
+            {/* Desktop: the full people × apps table */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+                    <th className="px-4 py-3">Person</th>
+                    {data.sites.map((s) => <th key={s.id} className="px-4 py-3 text-left">{s.display_name}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => (
+                    <tr key={p.email} className="border-b border-slate-100 align-top">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900">{p.email}</div>
+                        <div className="text-xs text-slate-400">{Object.keys(p.apps).length} app{Object.keys(p.apps).length === 1 ? "" : "s"}</div>
+                      </td>
+                      {data.sites.map((s) => (
+                        <td key={s.id} className="px-4 py-3">{appControls(p, s)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile: one card per person, apps stacked inside */}
+            <div className="md:hidden space-y-3">
+              {filtered.map((p) => (
+                <div key={p.email} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="font-medium text-slate-900 break-all">{p.email}</div>
+                  <div className="mb-3 text-xs text-slate-400">
+                    {Object.keys(p.apps).length} app{Object.keys(p.apps).length === 1 ? "" : "s"}
+                  </div>
+                  <div className="space-y-3">
+                    {data.sites.map((s) => (
+                      <div key={s.id} className="rounded-lg bg-slate-50 p-2.5">
+                        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          {s.display_name}
+                        </div>
+                        {appControls(p, s)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         <p className="mt-4 text-xs text-slate-400">
